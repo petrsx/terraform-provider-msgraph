@@ -19,15 +19,6 @@ func defaultIgnores() []string {
 	return []string{"body", "output", "retry"}
 }
 
-func timeProviderExternalProvider() map[string]resource.ExternalProvider {
-	return map[string]resource.ExternalProvider{
-		"time": {
-			Source:            "hashicorp/time",
-			VersionConstraint: ">= 0.9.0",
-		},
-	}
-}
-
 type MSGraphTestResource struct{}
 
 func TestAcc_ResourceBasic(t *testing.T) {
@@ -212,7 +203,6 @@ func TestAcc_ResourceNamedLocationWithODataType(t *testing.T) {
 				check.That(data.ResourceName).Exists(r),
 				check.That(data.ResourceName).Key("id").IsUUID(),
 			),
-			ExternalProviders: timeProviderExternalProvider(),
 		},
 		{
 			Config: r.namedLocation("Updated Named Location", []string{"1.2.3.4/32", "1.2.3.5/32"}),
@@ -220,7 +210,6 @@ func TestAcc_ResourceNamedLocationWithODataType(t *testing.T) {
 				check.That(data.ResourceName).Exists(r),
 				check.That(data.ResourceName).Key("id").IsUUID(),
 			),
-			ExternalProviders: timeProviderExternalProvider(),
 		},
 		{
 			Config: r.namedLocation("Updated Named Location", []string{"1.2.3.4/32"}),
@@ -228,7 +217,6 @@ func TestAcc_ResourceNamedLocationWithODataType(t *testing.T) {
 				check.That(data.ResourceName).Exists(r),
 				check.That(data.ResourceName).Key("id").IsUUID(),
 			),
-			ExternalProviders: timeProviderExternalProvider(),
 		},
 	})
 }
@@ -492,17 +480,6 @@ resource "msgraph_resource" "test" {
     ]
     isTrusted     = false
     "@odata.type" = "#microsoft.graph.ipNamedLocation"
-  }
-  response_export_values = {
-    id = "id"
-  }
-}
-
-resource "time_sleep" "wait" {
-  depends_on      = [msgraph_resource.test]
-  create_duration = "20s"
-  triggers = {
-    id = msgraph_resource.test.output.id
   }
 }
 `, displayName, ipRangesConfig)

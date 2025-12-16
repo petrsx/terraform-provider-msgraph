@@ -8,6 +8,7 @@ ENHANCEMENTS:
 - `msgraph_update_resource`: Added support for `update_method` attribute to allow choosing between `PATCH` (default) and `PUT` for update operations.
 - provider: Added support for authenticating with Azure PowerShell via the `use_powershell` attribute and `ARM_USE_POWERSHELL` environment variable. This provides an alternative to Azure CLI authentication without the client ID permission limitations ([#67](https://github.com/microsoft/terraform-provider-msgraph/issues/67))
 - `msgraph_resource`: Support `moved` block to move resources from `azuread` provider to `msgraph` provider.
+- `msgraph_resource`: Added support for waiting for creation/deletion consistency.
 
 DEPENDENCIES:
 - Updated `github.com/Azure/azure-sdk-for-go/sdk/azidentity` from v1.8.0 to v1.13.0 to enable Azure PowerShell authentication support

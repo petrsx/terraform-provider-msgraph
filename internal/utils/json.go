@@ -147,7 +147,7 @@ func UpdateObject(old interface{}, new interface{}, option UpdateJsonOption) int
 			if option.IgnoreCasing && strings.EqualFold(oldValue, newStr) {
 				return oldValue
 			}
-			if option.IgnoreMissingProperty && (regexp.MustCompile(`^\*+$`).MatchString(newStr) || "<redacted>" == newStr || "" == newStr) {
+			if option.IgnoreMissingProperty && (regexp.MustCompile(`^\*+$`).MatchString(newStr) || newStr == "<redacted>" || newStr == "") {
 				return oldValue
 			}
 		}
@@ -261,7 +261,7 @@ func DiffObject(old interface{}, new interface{}, option UpdateJsonOption) inter
 			if option.IgnoreCasing && strings.EqualFold(oldValue, newStr) {
 				return nil
 			}
-			if option.IgnoreMissingProperty && (regexp.MustCompile(`^\*+$`).MatchString(newStr) || "<redacted>" == newStr || "" == newStr) {
+			if option.IgnoreMissingProperty && (regexp.MustCompile(`^\*+$`).MatchString(newStr) || newStr == "<redacted>" || newStr == "") {
 				return nil
 			}
 		}

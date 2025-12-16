@@ -54,8 +54,8 @@ func (td *TestData) RandomInt() int {
 	return RandTimeInt()
 }
 
-func (td *TestData) RandomStringOfLength(len int) string {
-	return RandStringFromCharSet(len, charSetAlphaNum)
+func (td *TestData) RandomStringOfLength(length int) string {
+	return RandStringFromCharSet(length, charSetAlphaNum)
 }
 
 // UpgradeTestDeployStep returns a test step used to deploy the configuration with previous version

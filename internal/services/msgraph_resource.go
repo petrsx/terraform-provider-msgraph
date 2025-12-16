@@ -27,6 +27,7 @@ import (
 	"github.com/microsoft/terraform-provider-msgraph/internal/dynamic"
 	"github.com/microsoft/terraform-provider-msgraph/internal/retry"
 	"github.com/microsoft/terraform-provider-msgraph/internal/utils"
+	"github.com/microsoft/terraform-provider-msgraph/internal/utils/consistency"
 )
 
 const FlagMoveState = "move_state"
@@ -224,6 +225,7 @@ func (r *MSGraphResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.Append(req.Plan.Get(ctx, &model)...); resp.Diagnostics.HasError() {
 		return
 	}
+	isRelationship := strings.HasSuffix(model.Url.ValueString(), "/$ref")
 
 	createTimeout, diags := model.Timeouts.Create(ctx, 30*time.Minute)
 	resp.Diagnostics.Append(diags...)
@@ -246,7 +248,7 @@ func (r *MSGraphResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	if strings.HasSuffix(model.Url.ValueString(), "/$ref") { // extract the id from the response body
+	if isRelationship { // extract the id from the response body
 		if requestMap, ok := requestBody.(map[string]interface{}); ok {
 			if idValue, ok := requestMap["@odata.id"]; ok {
 				if idString, ok := idValue.(string); ok {
@@ -272,6 +274,15 @@ func (r *MSGraphResource) Create(ctx context.Context, req resource.CreateRequest
 
 		model.Id = types.StringValue(responseId)
 		model.ResourceUrl = types.StringValue(fmt.Sprintf("%s/%s", model.Url.ValueString(), responseId))
+	}
+
+	// Wait for the resource to be available
+	if err = consistency.WaitForUpdate(ctx, ResourceExistenceFunc(r.client, model)); err != nil {
+		resp.Diagnostics.AddError("Error", fmt.Sprintf("waiting for creation of %s: %v", model.Url.ValueString(), err))
+		return
+	}
+
+	if !isRelationship {
 		options = clients.RequestOptions{
 			QueryParameters: clients.NewQueryParameters(AsMapOfLists(model.ReadQueryParameters)),
 			RetryOptions: clients.CombineRetryOptions(
@@ -299,6 +310,8 @@ func (r *MSGraphResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.Append(req.State.Get(ctx, &state)...); resp.Diagnostics.HasError() {
 		return
 	}
+
+	// relationship updates are not supported
 
 	updateTimeout, diags := model.Timeouts.Update(ctx, 30*time.Minute)
 	resp.Diagnostics.Append(diags...)
@@ -353,6 +366,12 @@ func (r *MSGraphResource) Update(ctx context.Context, req resource.UpdateRequest
 		}
 	}
 
+	// Wait for the resource to be available
+	if err := consistency.WaitForUpdate(ctx, ResourceExistenceFunc(r.client, model)); err != nil {
+		resp.Diagnostics.AddError("Error", fmt.Sprintf("waiting for creation of %s: %v", model.Url.ValueString(), err))
+		return
+	}
+
 	options = clients.RequestOptions{
 		QueryParameters: clients.NewQueryParameters(AsMapOfLists(model.ReadQueryParameters)),
 		RetryOptions:    clients.NewRetryOptions(model.Retry),
@@ -371,6 +390,7 @@ func (r *MSGraphResource) Read(ctx context.Context, req resource.ReadRequest, re
 	if resp.Diagnostics.Append(req.State.Get(ctx, &model)...); resp.Diagnostics.HasError() {
 		return
 	}
+	isRelationship := strings.HasSuffix(model.Url.ValueString(), "/$ref")
 
 	// Apply read timeout (default 5m if not configured)
 	readTimeout, diags := model.Timeouts.Read(ctx, 5*time.Minute)
@@ -383,7 +403,7 @@ func (r *MSGraphResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 
 	state := model
-	if strings.HasSuffix(model.Url.ValueString(), "/$ref") {
+	if isRelationship {
 		// Check if the resource exists in the collection
 		collectionUrl := baseCollectionUrl(model.Url.ValueString())
 		options := clients.RequestOptions{
@@ -521,6 +541,66 @@ func (r *MSGraphResource) Delete(ctx context.Context, req resource.DeleteRequest
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete resource", err.Error())
 		return
+	}
+
+	// Wait for deletion to complete
+	if err = consistency.WaitForDeletion(ctx, ResourceExistenceFunc(r.client, model)); err != nil {
+		resp.Diagnostics.AddError("Error waiting for deletion", err.Error())
+	}
+}
+
+func ResourceExistenceFunc(client *clients.MSGraphClient, model *MSGraphResourceModel) consistency.ChangeFunc {
+	return func(ctx context.Context) (*bool, error) {
+		if model == nil {
+			return nil, fmt.Errorf("model is nil")
+		}
+		if client == nil {
+			return nil, fmt.Errorf("client is nil")
+		}
+		if model.Id.ValueString() == "" {
+			return nil, fmt.Errorf("resource ID is empty")
+		}
+		if model.Url.ValueString() == "" {
+			return nil, fmt.Errorf("resource URL is empty")
+		}
+
+		if strings.HasSuffix(model.Url.ValueString(), "/$ref") {
+			collectionUrl := baseCollectionUrl(model.Url.ValueString())
+			options := clients.RequestOptions{
+				QueryParameters: clients.NewQueryParameters(AsMapOfLists(model.ReadQueryParameters)),
+			}
+			referenceIds, err := client.ListRefIDs(ctx, collectionUrl, model.ApiVersion.ValueString(), options)
+			if err != nil {
+				if utils.ResponseErrorWasNotFound(err) {
+					b := false
+					return &b, nil
+				}
+				return nil, err
+			}
+			found := false
+			for _, refId := range referenceIds {
+				if refId == model.Id.ValueString() {
+					found = true
+					break
+				}
+			}
+			return &found, nil
+		}
+
+		options := clients.RequestOptions{
+			QueryParameters: clients.NewQueryParameters(AsMapOfLists(model.ReadQueryParameters)),
+		}
+		itemUrl := fmt.Sprintf("%s/%s", model.Url.ValueString(), model.Id.ValueString())
+		_, err := client.Read(ctx, itemUrl, model.ApiVersion.ValueString(), options)
+		if err != nil {
+			if utils.ResponseErrorWasNotFound(err) {
+				b := false
+				return &b, nil
+			}
+			return nil, err
+		}
+		b := true
+		return &b, nil
 	}
 }
 
