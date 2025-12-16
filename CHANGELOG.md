@@ -4,6 +4,8 @@ FEATURES:
 - **New Authentication Method**: Azure PowerShell authentication support via `use_powershell` provider attribute
 
 ENHANCEMENTS:
+- `msgraph_resource`: Added support for `update_method` attribute to allow choosing between `PATCH` (default) and `PUT` for update operations.
+- `msgraph_update_resource`: Added support for `update_method` attribute to allow choosing between `PATCH` (default) and `PUT` for update operations.
 - provider: Added support for authenticating with Azure PowerShell via the `use_powershell` attribute and `ARM_USE_POWERSHELL` environment variable. This provides an alternative to Azure CLI authentication without the client ID permission limitations ([#67](https://github.com/microsoft/terraform-provider-msgraph/issues/67))
 - `msgraph_resource`: Support `moved` block to move resources from `azuread` provider to `msgraph` provider.
 
